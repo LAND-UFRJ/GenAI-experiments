@@ -1,17 +1,10 @@
 import openai
 import json
-import numpy as np
-import pandas as pd
 
 client = openai.OpenAI(
     api_key=  # can be a senha de sempre
     base_url= #olhar na planilha,  # NOTE: Replace with IP address and port of your llama-cpp-python server
 )
-
-random_array = np.random.rand(10, 2)  
-df = pd.DataFrame(random_array, columns=["A", "B"])
-df.to_csv("random_data.csv", index=False)
-
 
 def get_current_weather(location, unit="fahrenheit"):
     """Get the current weather in a given location"""
