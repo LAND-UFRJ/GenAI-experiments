@@ -3,8 +3,8 @@ import json
 import pandas as pd
 
 client = openai.OpenAI(
-    api_key= 'landufrj123',
-    base_url= 'http://10.246.3.122:8080/v1'
+    api_key= '',
+    base_url= ''
 )
 
 def maxi_tool(column: str) -> float:
