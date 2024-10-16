@@ -1,3 +1,6 @@
+#This code is an example of function calling useing the model functionary-small-v2.5.Q4_0.gguf
+#The server used in this example is the one provided in llama-cpp-python 
+
 import openai
 import json
 import pandas as pd
