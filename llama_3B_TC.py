@@ -1,8 +1,23 @@
 #This code is an example of function calling useing the model Llama-3.2-3B-Instruct-Q8_0.gguf
 #The server used in this example is the one provided in llama-cpp-python 
 import openai
+import re
 
-def processing(x):
+def convert_keys_to_string(args):
+    # Use regex to find keys and wrap them in double quotes
+    args = re.sub(r'(\w+):', r'"\1":', args)
+    return args
+
+def processing_dict(x):
+    x = x.split('>>>')[1].strip()
+    function = x.split('.')[1]
+    function = function.split('(')[0]
+    args = x.split('(')[1].split(')')[0]
+    args = convert_keys_to_string(args)
+    args = eval(args)
+    return function, args
+
+def processing_no_dict(x):
     x = x.split('>>>')[1].strip()
     function = x.split('.')[1]
     name = x.split('(')[0].split('.')[1]
@@ -20,7 +35,7 @@ def add(a:int,b:int):
 
 def run_conversation_ll3BQ8():
     # Step 1: send the conversation and available functions to the model
-    prompt = 'What is 3 + 4?'
+    prompt = 'What is the sum of 2 and 3?'
     messages = [
         {
             "role": "user",
@@ -60,28 +75,43 @@ def run_conversation_ll3BQ8():
     )
     response_message = response.choices[0].message
     tool_calls = response_message.tool_calls
+
     if tool_calls:
-        
         available_functions = {"add": add,}  
         messages.append(response_message) 
-#this code will be used with the model Llama-3.2-3B-Instruct-Q8_0.gguf
-    
-        for tool_call in tool_calls:
-            function_name, function_response = processing(tool_call.function.name)
-            messages.append(
-                {
-                    "tool_call_id": tool_call.id,
-                    "role": "function",
-                    "name": function_name,
-                    "content": f"generate and answer based on the output of the funtion being: {function_response}",
-                }
-            )
-            second_response = client.chat.completions.create(
-            model="Llama-3.2-3B-Instruct-Q8_0",
-            messages=messages,
-            temperature=0,
-            top_p=0
-            ) 
-        return second_response.choices[0].message.content
 
-print(run_conversation_ll3BQ8())
+        for tool_call in tool_calls:
+        #caso 1 '>>>functions.add({a: 2, b: 3})'
+            if '}' in tool_call.function.name:
+                function_name, function_args = processing_dict(tool_call.function.name)
+                function_to_call = available_functions[function_name]
+                function_response = function_to_call(**function_args)
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "function",
+                        "name": function_name,
+                        "content": f"generate and answer based on the output of the funtion being: {function_response}",
+                    }
+                )
+                second_response = client.chat.completions.create(
+                model="Llama-3.2-3B-Instruct-Q8_0",
+                messages=messages,
+                temperature=1,) 
+                return second_response.choices[0].message.content
+            elif '}' not in tool_call.function.name:
+            #caso 2 '>>>functions.add(2,3)'
+                function_name, function_response = processing_no_dict(tool_call.function.name)
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "function",
+                        "name": function_name,
+                        "content": f"generate and answer based on the output of the funtion being: {function_response}",
+                    }
+                )
+                second_response = client.chat.completions.create(
+                model="Llama-3.2-3B-Instruct-Q8_0",
+                messages=messages,
+                temperature=1,) 
+                return second_response.choices[0].message.content
