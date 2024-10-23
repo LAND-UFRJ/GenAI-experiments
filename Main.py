@@ -67,7 +67,7 @@ client = openai.OpenAI(
 ############################
 
 def change(parameter:str, value:str):
-    device_id = ''
+    device_id = 
     acs = genieacs.Connection()
     print(f"Changing parameter {parameter} to {value}")
     acs.task_set_parameter_values(device_id, [[parameter, value]])
@@ -81,13 +81,26 @@ def list_devices(device_id:str)->list:
         lista.append(acs.device_get_parameter(device_id, f"Device.Hosts.Host.{n}.HostName"))
     return lista
 
-def info_peer(device_name:str, device_id:str)->list:
+def info_peer(device_name:str)->list:
+    device_id=
     acs = genieacs.Connection()
-    num_dev = acs.device_get_parameter(device_id, "Device.Hosts.HostNumberOfEntries")
+    num_dev = acs.device_get_parameter(device_id, "Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDeviceNumberOfEntries")
     lista = []
     for n in range(1, int(num_dev)+1):
-        lista.append(acs.device_get_parameter(device_id, f"Device.Hosts.Host.{n}.HostName"))
+        lista.append(acs.device_get_parameter(device_id, f"Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDevice.{n}.X_TP_HostName"))
     best_match, score, index = find_most_similar_string(device_name, lista)
+    param = [f'Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDevice.{index}.OperatingStandard',
+             f'Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDevice.{index}.Active',
+             f'Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDevice.{index}.AssociationTime',
+             f'Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDevice.{index}.SignalStrength',
+             f'Device.WiFi.MultiAP.APDevice.1.Radio.1.AP.2.AssociatedDevice.{index}.MACAddress']
+    lista = []
+    for p in param:
+        acs.task_refresh_object(device_id, p)
+        lista.append(acs.device_get_parameter(device_id, p))
+    return lista
+
+
 
 
 ##################################
@@ -100,7 +113,7 @@ def info_peer(device_name:str, device_id:str)->list:
 
 def adapt_prompt():
     #prompt = input("Enter your prompt: ")
-    prompt = 'Can you list the divices connected to the network?'
+    prompt = 'Can you give the information about the devide with the name S23?'
     text = """This document provides the explanation of genieacs syntax and its translation to natural language. This document is meant to help the model translate a prompt made in natural language into a prompt that has the correct syntax to be used in function calling. Sumerazeing, this model should receive a prompt in natural language and rewrite it in the correct syntax.
 
     "Device.WiFi.AccessPoint.1.Security.KeyPassphrase":
@@ -116,6 +129,9 @@ def adapt_prompt():
 
     If the user asks to list the devices connected to the network, or the devices connected, you must return the same prompt the user sent you. Foe example:
     'Can you list the devices connected to the network?' should return 'Can you list the devices connected to the network?'
+
+    If the user asks a question like 'can you give the information about the device with the name 'device_name'?' you must return the same prompt the user sent you. For example:
+    'Can you give the information about the device with the name 'device_name'?' should return 'Can you give the information about the device with the name 'device_name'?'
     """
 
     messages = [{"role":"system","content": f"You will have to answer questions based on the following knowlegde base: {text}"},
@@ -128,6 +144,7 @@ def adapt_prompt():
             temperature=0,
             top_p=0        
         )
+    print(response.choices[0].message.content)
     return (response.choices[0].message.content)
 
 def tool(prompt):
@@ -167,6 +184,23 @@ def tool(prompt):
                 "description": "List all devices in the ACS",
                 "parameters": {},
             },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "info_peer",
+                "description": "Get information about a peer",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "device_name": {
+                            "type": "string",
+                            "description": "The name of the device to get information about",
+                        },
+                    },
+                    "required": ["device_name"],
+                },
+            },
         }
     ]
     response = client.chat.completions.create(
@@ -179,11 +213,13 @@ def tool(prompt):
     )
     response_message = response.choices[0].message
     tool_calls = response_message.tool_calls
+    
     if tool_calls:
-        available_functions = {"change": change,'list_devices': list_devices}  
+        available_functions = {"change": change,'list_devices': list_devices, 'info_peer': info_peer}  
         messages.append(response_message) 
 
     for tool_call in tool_calls:
+            print(messages)
         #caso 1 '>>>functions.add({a: 2, b: 3})'
             if '}' in tool_call.function.name and '>>>functions' in tool_call.function.name:
                 function_name, function_args = processing_dict(tool_call.function.name)
@@ -200,7 +236,7 @@ def tool(prompt):
                 second_response = client.chat.completions.create(
                 model="Llama-3.2-3B-Instruct-Q8_0",
                 messages=messages,
-                temperature=1,) 
+                temperature=0,) 
                 return second_response.choices[0].message.content
 
             elif '}' not in tool_call.function.name and '>>>functions' in tool_call.function.name:
@@ -237,6 +273,7 @@ def tool(prompt):
                 model="Llama-3.2-3B-Instruct-Q8_0",
                 messages=messages,
                 temperature=0,) 
+                print(second_response.choices[0].message.content)
                 return second_response.choices[0].message.content
 
 ########################
@@ -247,4 +284,5 @@ def main():
     prompt = adapt_prompt()
     print(tool(prompt))
 
-main()
+#main()
+print(info_peer('S23'))
